@@ -1,10 +1,8 @@
-import dotenv from 'dotenv';
+require('dotenv').config();
 
-dotenv.config();
-
-export default {
+module.exports = {
     CONNECTION_STRING: process.env.CONNECTION_STRING,
     DATABASE: process.env.DATABASE,
-    DB_PASSWORD: process.env.DB_PASSWORD,
     DB_USER: process.env.DB_USER,
-}
+    DB_PASSWORD: process.env.DB_PASSWORD,
+};
