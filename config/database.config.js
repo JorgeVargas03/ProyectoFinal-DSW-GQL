@@ -1,37 +1,16 @@
 const { MongoClient } = require('mongodb');
 const config = require('./config');
 
-class MongoDB {
-    constructor(uri) {
-        this.client = new MongoClient(uri);
-        this.db = null;
-        this.connected = false;
-    }
+const uri = config.CONNECTION_STRING;
+const client = new MongoClient(uri);
 
-    async connect() {
-        try {
-            await this.client.connect();
-            this.db = this.client.db();
-            this.connected = true;
-            console.log('✅ MongoDB conectado');
-            return this;
-        } catch (err) {
-            console.error('❌ Error de conexión:', err);
-            throw err;
-        }
-    }
+let db;
 
-    collection(name) {
-        if (!this.connected) {
-            throw new Error('Debes llamar a connect() primero');
-        }
-        return this.db.collection(name);
-    }
+async function connectDB() {
+    await client.connect();
+    db = client.db(config.DATABASE); // elige el nombre de tu BD
+    console.log(`Conectado a la base de datos ${config.DATABASE}`);
+    return db;
 }
 
-// Creamos y conectamos inmediatamente
-const instance = new MongoDB(config.CONNECTION_STRING).connect();
-
-module.exports = {
-    db: instance
-};
+module.exports = connectDB;

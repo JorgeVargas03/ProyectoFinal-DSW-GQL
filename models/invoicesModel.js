@@ -1,25 +1,22 @@
-const { db } = require('../config/database.config');
-const invoices = db.collection('invoices');
+const connectDB = require('../config/database.config');
+const Facturapi = require('facturapi').default;
+const facturapi = new Facturapi(process.env.API_KEY_FA);
 
-async function insertarFactura() {
-
-
-    const nuevaFactura = {
-        cliente: 'Juan Pérez',
-        total: 1500,
-        fecha: new Date(),
-        productos: [
-            { nombre: 'Producto A', precio: 500 },
-            { nombre: 'Producto B', precio: 1000 }
-        ]
-    };
-
+async function getInvoices() {
     try {
-        const resultado = await invoices.insertOne(nuevaFactura);
-        console.log('🧾 Factura insertada con _id:', resultado.insertedId);
+        const facturas = await facturapi.invoices.list();
+        if (facturas) {
+            return console.log(facturas);
+        }
+        console.log("Sin facturas registradas")
     } catch (error) {
-        console.error('❌ Error al insertar factura:', error);
+        console.error('Error al listar facturas:', error);
     }
 }
+getInvoices()
+//682f690ee51f69ee6f9a8487
 
-insertarFactura();
+async function getCollection(collectionName) {
+    const db = await connectDB();
+    return db.collection(collectionName);
+}
