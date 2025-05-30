@@ -1,24 +1,47 @@
 const { gql } = require('apollo-server');
 const typeDefs = gql`
-  type User {
-    id: ID!
-    email: String!
-    phone: String!
-    isVerified: Boolean!
-  }
+  type Invoice {
+  id: ID!
+  facturapiId: String!
+  customerId: ID!
+  items: [InvoiceItem!]!
+  total: Float!
+  createdAt: String!
+}
 
-  type Query {
-    getUsers: [User]
-    getUser(id: ID!): User
-  }
+type InvoiceItem {
+  productId: String!
+  quantity: Int!
+  unitPrice: Float!
+}
 
-  type Mutation {
-    registerUser(email: String!, phone: String!, via: String!): User
-    verifyCode(email: String!, code: String!): User
-    login(email: String!): String
-    updateUser(id: ID!, email: String, phone: String): User
-    deleteUser(id: ID!): Boolean
-  }
+input InvoiceItemInput {
+  productId: String!
+  quantity: Int!
+  unitPrice: Float!
+}
+
+input CreateInvoiceInput {
+  customerId: ID!
+  items: [InvoiceItemInput!]!
+  use: String!
+  paymentForm: String!
+  paymentMethod: String!
+}
+
+type Query {
+  getInvoice(id: ID!): Invoice
+  listInvoices: [Invoice!]!
+  getInvoicesByCustomer(customerId: ID!): [Invoice!]!
+}
+
+type Mutation {
+  createInvoice(input: CreateInvoiceInput!): Invoice
+  cancelInvoice(id: ID!): Boolean
+  downloadInvoice(id: ID!, format: String!): String
+  sendInvoiceByEmail(id: ID!, email: String): Boolean
+}
+
 `;
 
 module.exports = typeDefs; 
