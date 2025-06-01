@@ -7,9 +7,10 @@ const path = require("path");
 
 // Importar la librería de Twilio
 const twilio = require("twilio");
-
+const TWILIO_ACCOUNT_SID       = process.env.TWILIO_SID;
+const TWILIO_AUTH_TOKEN        = process.env.TWILIO_TOKEN;
 // Configurar cliente de Twilio (asegúrate de que estas variables de entorno estén definidas)
-const twilioClient = twilio(process.env.TWILIO_SID, process.env.TWILIO_TOKEN);
+const twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 const TWILIO_PHONE_NUMBER = process.env.TWILIO_NUMBER;
 
 async function getCollection(collectionName) {
@@ -59,7 +60,53 @@ async function createInvoice(input) {
     );
   }
 
-  return { id: result.insertedId, ...newInvoice };
+    const pdfUrl = invoice.pdf_url;
+  if (!pdfUrl) {
+    console.warn("No se obtuvo pdf_url de FacturAPI; no se envía por WhatsApp.");
+  } else {
+    // 7.b) Determinar a quién mandar por WhatsApp:
+    //      - Si el front-end te pasó directamente "customerPhoneNumber" ya en formato
+    //        "whatsapp:+521xxxxxxxxxxx", úsalo.  
+    //      - Sino, usa la variable de entorno CLIENTE_WHATSAPP_NUMBER
+    const destinoWhatsApp = input.customerPhoneNumber && input.customerPhoneNumber.startsWith("whatsapp:")
+      ? input.customerPhoneNumber
+      : CLIENTE_WHATSAPP_NUMBER;
+
+    if (!destinoWhatsApp) {
+      console.warn(
+        "No se especificó número de WhatsApp válido; omitiendo envío de PDF."
+      );
+    } else {
+      // 7.c) Construimos un texto breve para acompañar el PDF
+      const mensajeWhatsApp = 
+        `📄 *Factura Generada*\n\n` +
+        `ID Factura: ${invoice.id}\n` +
+        `Fecha: ${new Date(invoice.created_at).toLocaleDateString("es-MX")}\n` +
+        `Total: $${invoice.total}\n\n` +
+        `Te enviamos tu factura en PDF. ¡Gracias por tu compra!`;
+
+      try {
+        await twilioClient.messages.create({
+          from:     TWILIO_WHATSAPP_NUMBER,
+          to:       destinoWhatsApp,
+          body:     mensajeWhatsApp,
+          mediaUrl: [ pdfUrl ]
+        });
+        console.log("✅ Factura enviada por WhatsApp:", pdfUrl);
+      } catch (err) {
+        console.error("❌ Error enviando factura por WhatsApp:", err);
+      }
+    }
+
+    return {
+    id:          result.insertedId,
+    facturapiId: newInvoice.facturapiId,
+    customerId:  newInvoice.customerId,
+    items:       newInvoice.items,
+    total:       newInvoice.total,
+    createdAt:   newInvoice.createdAt,
+  };
+}
 }
 
 async function listInvoices() {

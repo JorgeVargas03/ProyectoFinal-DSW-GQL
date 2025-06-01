@@ -1,5 +1,6 @@
 const { gql } = require("apollo-server");
 const typeDefs = gql`
+# ————— Clientes e Invoices —————
   type Invoice {
     id: ID!
     facturapiId: String!
@@ -77,6 +78,42 @@ const typeDefs = gql`
     ): Cliente
 
     eliminarCliente(id: ID!): Boolean
+  }
+
+    # ————— Productos —————
+  type Producto {
+    id: ID!
+    nombre: String!
+    descripcion: String
+    precio: Float!
+    stock: Int!
+    facturapiId: String
+  }
+
+  input ProductoInput {
+    nombre: String!
+    descripcion: String
+    precio: Float!
+    stock: Int!
+  }
+
+  input ProductoUpdateInput {
+    nombre: String
+    descripcion: String
+    precio: Float
+    stock: Int
+  }
+
+  type Query {
+    # Productos
+    listarProductos: [Producto!]!
+    obtenerProducto(id: ID!): Producto
+  }
+  type Mutation {
+    # CRUD Productos
+    crearProducto(input: ProductoInput!): Producto!
+    actualizarProducto(id: ID!, cambios: ProductoUpdateInput!): Producto!
+    eliminarProducto(id: ID!): Boolean!
   }
 `;
 

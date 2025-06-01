@@ -1,20 +1,23 @@
 const { ApolloServer } = require("apollo-server");
 const typeDefs = require("./schemas/typeDefs");
-
+require("dotenv").config();
 const invoiceResolvers = require("./controllers/invoiceResolver");
 const clienteResolvers = require("./controllers/clienteController");
+const productoResolvers = require("./controllers/productoController");
 
-require("dotenv").config();
+
 require("./models/mongo");
 
 const allCombinedResolvers = {
   Query: {
     ...invoiceResolvers.Query,
     ...clienteResolvers.Query,
+    ...productoResolvers.Query
   },
   Mutation: {
     ...invoiceResolvers.Mutation,
     ...clienteResolvers.Mutation,
+    ...productoResolvers.Mutation
   },
 };
 
