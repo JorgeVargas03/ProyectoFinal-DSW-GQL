@@ -27,6 +27,7 @@ input CreateInvoiceInput {
   use: String!
   paymentForm: String!
   paymentMethod: String!
+  customerPhoneNumber: String
 }
 
 type Query {
