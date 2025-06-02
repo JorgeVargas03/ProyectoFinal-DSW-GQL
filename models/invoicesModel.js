@@ -4,14 +4,18 @@ const facturapi = new Facturapi(process.env.API_KEY_FA);
 const { ObjectId } = require("mongodb");
 const fs = require("fs");
 const path = require("path");
+const axios = require("axios");
 
 // Importar la librería de Twilio
 const twilio = require("twilio");
 const TWILIO_ACCOUNT_SID       = process.env.TWILIO_SID;
 const TWILIO_AUTH_TOKEN        = process.env.TWILIO_TOKEN;
+const apiKey = process.env.GEMINI_API_KEY;
+
+console.log("GEMINI API KEY: ",apiKey);
 // Configurar cliente de Twilio (asegúrate de que estas variables de entorno estén definidas)
 const twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-const TWILIO_PHONE_NUMBER = process.env.TWILIO_NUMBER;
+const TWILIO_PHONE_NUMBER = process.env.TWILIO_SMS_NUMBER;
 
 async function getCollection(collectionName) {
   const db = await connectDB();
@@ -19,12 +23,15 @@ async function getCollection(collectionName) {
 }
 
 async function createInvoice(input) {
-  const customersCollection = await getCollection("customers");
+  const customersCollection = await getCollection("clientes");
   const invoicesCollection = await getCollection("invoices");
-
+  const filtroId = new ObjectId(input.customerId);
+  console.log("Filtro por customerId: ", filtroId);
   const customer = await customersCollection.findOne({
     _id: new ObjectId(input.customerId),
   });
+  console.log("Input customerId: ", input.customerId);
+  console.log("Customer found: ",customer);
   if (!customer) throw new Error("Customer not found");
 
   const items = input.items.map((item) => ({
@@ -48,8 +55,22 @@ async function createInvoice(input) {
     createdAt: invoice.created_at,
   };
 
-  const aiSummary = await generateInvoiceSummary(invoice, summaryInput);
+  const summaryInput = {
+    customerName:   "Chompiras",
+    customerId:     input.customerId,
+    use:            input.use,
+    paymentForm:    input.paymentForm,
+    paymentMethod:  input.paymentMethod,
+    items:          input.items.map(item => ({
+                      productId: item.productId,
+                      quantity:  item.quantity,
+                      unitPrice: item.unitPrice,
+                      total:     item.quantity * item.unitPrice
+                    }))
+  };
 
+  const aiSummary = await generateInvoiceSummary(invoice, summaryInput);
+  console.log("AI Summary: ", aiSummary);
   const result = await invoicesCollection.insertOne(newInvoice);
 
   if (input.customerPhoneNumber) {
@@ -59,54 +80,9 @@ async function createInvoice(input) {
       `No se envió SMS: customerPhoneNumber no proporcionado para el cliente ${input.customerId}.`
     );
   }
+  
 
-    const pdfUrl = invoice.pdf_url;
-  if (!pdfUrl) {
-    console.warn("No se obtuvo pdf_url de FacturAPI; no se envía por WhatsApp.");
-  } else {
-    // 7.b) Determinar a quién mandar por WhatsApp:
-    //      - Si el front-end te pasó directamente "customerPhoneNumber" ya en formato
-    //        "whatsapp:+521xxxxxxxxxxx", úsalo.  
-    //      - Sino, usa la variable de entorno CLIENTE_WHATSAPP_NUMBER
-    const destinoWhatsApp = input.customerPhoneNumber && input.customerPhoneNumber.startsWith("whatsapp:")
-      ? input.customerPhoneNumber
-      : CLIENTE_WHATSAPP_NUMBER;
-
-    if (!destinoWhatsApp) {
-      console.warn(
-        "No se especificó número de WhatsApp válido; omitiendo envío de PDF."
-      );
-    } else {
-      // 7.c) Construimos un texto breve para acompañar el PDF
-      const mensajeWhatsApp = 
-        `📄 *Factura Generada*\n\n` +
-        `ID Factura: ${invoice.id}\n` +
-        `Fecha: ${new Date(invoice.created_at).toLocaleDateString("es-MX")}\n` +
-        `Total: $${invoice.total}\n\n` +
-        `Te enviamos tu factura en PDF. ¡Gracias por tu compra!`;
-
-      try {
-        await twilioClient.messages.create({
-          from:     TWILIO_WHATSAPP_NUMBER,
-          to:       destinoWhatsApp,
-          body:     mensajeWhatsApp,
-          mediaUrl: [ pdfUrl ]
-        });
-        console.log("✅ Factura enviada por WhatsApp:", pdfUrl);
-      } catch (err) {
-        console.error("❌ Error enviando factura por WhatsApp:", err);
-      }
-    }
-
-    return {
-    id:          result.insertedId,
-    facturapiId: newInvoice.facturapiId,
-    customerId:  newInvoice.customerId,
-    items:       newInvoice.items,
-    total:       newInvoice.total,
-    createdAt:   newInvoice.createdAt,
-  };
-}
+  return { id: result.insertedId, ...newInvoice };
 }
 
 async function listInvoices() {
@@ -178,9 +154,7 @@ async function generateInvoiceSummary(invoiceData, originalInput) {
 Redacta un resumen Máximo 3 oraciones y menos de 50 palabras. En español. breve y fácil de entender sobre esta factura. Usa un lenguaje claro y directo.
 Incluye: nombre del cliente, total a pagar con moneda, uso, forma de pago, método de pago, y lista de artículos.
 
-Cliente: ${originalInput.customerName || "No especificado"} (ID: ${
-      originalInput.customerId
-    })
+Cliente: ${originalInput.customerName || "No especificado"} (ID: ${originalInput.customerId})
 Total: ${invoiceData.total || "No especificado"} ${invoiceData.currency || ""}
 Uso: ${originalInput.use || "No especificado"}
 Forma de pago: ${originalInput.paymentForm || "No especificado"}
@@ -200,36 +174,34 @@ ${
 
     const chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
     const payload = { contents: chatHistory };
-    const apiKey = process.env.GEMINI_API_KEY || "API_KEY_AQUI";
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
-    const response = await fetch(apiUrl, {
-      method: "POST",
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("Falta la variable de entorno GEMINI_API_KEY");
+    }
+    const apiUrl =
+      `https://generativelanguage.googleapis.com/v1beta/models/` +
+      `gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+    // Usamos axios en lugar de fetch
+    const response = await axios.post(apiUrl, payload, {
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(
-        `Error en la API de Gemini: ${
-          errorData.error?.message || response.statusText
-        }`
-      );
-    }
-
-    const result = await response.json();
-
-    if (
+    const result = response.data;
+    const candidate =
       result.candidates &&
       result.candidates.length > 0 &&
       result.candidates[0].content &&
       result.candidates[0].content.parts &&
       result.candidates[0].content.parts.length > 0
-    ) {
-      return result.candidates[0].content.parts[0].text;
+        ? result.candidates[0].content.parts[0].text
+        : null;
+
+    if (candidate) {
+      return candidate;
     } else {
-      console.warn("Estructura de respuesta inesperada de Gemini.");
+      console.warn("Estructura de respuesta inesperada de Gemini:", result);
       return "No se pudo generar un resumen de la factura.";
     }
   } catch (err) {
@@ -255,8 +227,8 @@ async function sendSmsSummary(toPhoneNumber, message) {
   try {
     const smsResponse = await twilioClient.messages.create({
       body: `Resumen de tu factura: ${message}`,
-      from: TWILIO_PHONE_NUMBER, // Tu número de Twilio
-      to: toPhoneNumber, // Número de teléfono del cliente
+      from: "+17754597353", // Tu número de Twilio
+      to: "+523112688611", // Número de teléfono del cliente
     });
     console.log(
       `SMS enviado exitosamente a ${toPhoneNumber}. SID: ${smsResponse.sid}`

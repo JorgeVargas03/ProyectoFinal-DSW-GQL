@@ -15,8 +15,11 @@ const resolvers = {
         tax_id: data.rfc,
         tax_system: "616", 
         address: {
-          zip: '86991'
-      }
+          zip: '86991',
+          neighborhood: data.colonia || 'Colonia Falsa',
+          street: data.direccion || 'Calle Falsa 123',
+          exterior: data.numeroExterior || '123'
+        }
         });
         const cliente = new Cliente({
           ...data,
@@ -34,7 +37,8 @@ const resolvers = {
           facturapiId: saved.facturapiId
         };
       } catch (error) {
-        throw new Error('Error al crear cliente: ' + error.message);
+        console.error(">> FacturAPI error:", error.response?.data || error);
+        throw new Error('Error al crear cliente: ' + error.response?.data?.message || error.message);
       }
     },
     actualizarCliente: async (_, { id, ...rest }) => {

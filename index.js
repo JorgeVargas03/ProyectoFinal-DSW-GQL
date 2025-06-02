@@ -1,3 +1,4 @@
+global.XMLHttpRequest = require("xhr2");
 const { ApolloServer } = require("apollo-server");
 const typeDefs = require("./schemas/typeDefs");
 require("dotenv").config();

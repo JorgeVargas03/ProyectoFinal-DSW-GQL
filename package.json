@@ -17,6 +17,7 @@
     "mongodb": "^6.16.0",
     "mongoose": "^8.15.1",
     "nodemailer": "^7.0.3",
-    "twilio": "^5.7.0"
+    "twilio": "^5.7.0",
+    "xhr2": "^0.2.1"
   }
 }
