@@ -157,13 +157,26 @@ async function downloadInvoice(id, format) {
   const validFormats = ["pdf", "xml", "zip"];
   if (!validFormats.includes(format)) throw new Error("Invalid format");
 
-  const stream = await facturapi.invoices.download(invoice.facturapiId, format);
-  const filePath = path.join(
-    __dirname,
-    `../downloads/${invoice.facturapiId}.${format}`
-  );
-  const writeStream = fs.createWriteStream(filePath);
-  stream.pipe(writeStream);
+  const url = `https://www.facturapi.io/v2/invoices/${invoice.facturapiId}/${format}`;
+
+  const response = await axios.get(url, {
+    responseType: "arraybuffer",
+    headers: {
+      Authorization: `Bearer ${process.env.API_KEY_FA}`,
+    },
+  });
+
+  const downloadsDir = path.join(__dirname, "../downloads");
+
+  // Crear directorio si no existe
+  if (!fs.existsSync(downloadsDir)) {
+    fs.mkdirSync(downloadsDir, { recursive: true });
+  }
+
+  const filePath = path.join(downloadsDir, `${invoice.facturapiId}.${format}`);
+
+  const buffer = Buffer.from(response.data);
+  fs.writeFileSync(filePath, buffer);
 
   return filePath;
 }
@@ -183,7 +196,7 @@ async function generateInvoiceSummary(invoiceData, originalInput) {
   try {
     const prompt = `
 Redacta un resumen Máximo 3 oraciones y menos de 30 palabras. En español. breve y fácil de entender sobre esta factura. Usa un lenguaje claro y directo.
-Incluye: nombre del cliente, total a pagar con moneda, uso, forma de pago, método de pago, y lista de artículos.
+Incluye: nombre del cliente, el totla pagado con moneda, uso, forma de pago, método de pago, y lista de artículos.
 
 Cliente: ${originalInput.customerName || "No especificado"} (ID: ${
       originalInput.customerId
