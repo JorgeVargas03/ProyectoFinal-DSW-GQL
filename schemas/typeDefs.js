@@ -1,6 +1,6 @@
 const { gql } = require("apollo-server");
 const typeDefs = gql`
-# ————— Clientes e Invoices —————
+  # ————— Clientes e Invoices —————
   type Invoice {
     id: ID!
     facturapiId: String!
@@ -8,18 +8,19 @@ const typeDefs = gql`
     items: [InvoiceItem!]!
     total: Float!
     createdAt: String!
+    customerName: String # campo nuevo
+    aiSummary: String # campo nuevo
   }
 
   type InvoiceItem {
     productId: String!
     quantity: Int!
-    unitPrice: Float!
   }
 
   input InvoiceItemInput {
     productId: String!
     quantity: Int!
-    unitPrice: Float!
+    unitPrice: Float
   }
 
   input CreateInvoiceInput {
@@ -80,7 +81,7 @@ const typeDefs = gql`
     eliminarCliente(id: ID!): Boolean
   }
 
-    # ————— Productos —————
+  # ————— Productos —————
   type Producto {
     id: ID!
     nombre: String!

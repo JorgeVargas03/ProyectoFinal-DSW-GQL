@@ -8,11 +8,11 @@ const axios = require("axios");
 
 // Importar la librería de Twilio
 const twilio = require("twilio");
-const TWILIO_ACCOUNT_SID       = process.env.TWILIO_SID;
-const TWILIO_AUTH_TOKEN        = process.env.TWILIO_TOKEN;
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_SID;
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_TOKEN;
 const apiKey = process.env.GEMINI_API_KEY;
 
-console.log("GEMINI API KEY: ",apiKey);
+console.log("GEMINI API KEY: ", apiKey);
 // Configurar cliente de Twilio (asegúrate de que estas variables de entorno estén definidas)
 const twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 const TWILIO_PHONE_NUMBER = process.env.TWILIO_SMS_NUMBER;
@@ -25,62 +25,93 @@ async function getCollection(collectionName) {
 async function createInvoice(input) {
   const customersCollection = await getCollection("clientes");
   const invoicesCollection = await getCollection("invoices");
-  const filtroId = new ObjectId(input.customerId);
-  console.log("Filtro por customerId: ", filtroId);
+  const productosCollection = await getCollection("productos");
+
   const customer = await customersCollection.findOne({
     _id: new ObjectId(input.customerId),
   });
-  console.log("Input customerId: ", input.customerId);
-  console.log("Customer found: ",customer);
+
   if (!customer) throw new Error("Customer not found");
 
-  const items = input.items.map((item) => ({
-    quantity: item.quantity,
-    product: item.productId,
-  }));
+  // Construir items enriquecidos para Facturapi y para guardar
+  const facturapiItems = [];
+  const enrichedItems = [];
 
+  for (const item of input.items) {
+    const producto = await productosCollection.findOne({
+      _id: new ObjectId(item.productId),
+    });
+
+    if (!producto)
+      throw new Error(`Producto con ID ${item.productId} no encontrado`);
+    if (!producto.facturapiId)
+      throw new Error(`Producto ${producto.nombre} no tiene facturapiId`);
+    if (producto.precio == null)
+      throw new Error(`Producto ${producto.nombre} no tiene precio definido`);
+
+    facturapiItems.push({
+      product: producto.facturapiId,
+      quantity: item.quantity, // ✅ solo esto
+    });
+
+    enrichedItems.push({
+      productId: item.productId,
+      nombre: producto.nombre,
+      precio: producto.precio,
+      quantity: item.quantity,
+      total: producto.precio * item.quantity,
+      facturapiId: producto.facturapiId,
+    });
+  }
+
+  // Crear factura en Facturapi
   const invoice = await facturapi.invoices.create({
     customer: customer.facturapiId,
-    items,
+    items: facturapiItems,
     use: input.use,
     payment_form: input.paymentForm,
     payment_method: input.paymentMethod,
   });
 
+  // Construir entrada para guardar en Mongo
   const newInvoice = {
     facturapiId: invoice.id,
     customerId: input.customerId,
-    items: input.items,
+    customerName: customer.nombre,
+    items: enrichedItems,
     total: invoice.total,
     createdAt: invoice.created_at,
   };
 
+  // Generar resumen IA
   const summaryInput = {
-    customerName:   "Chompiras",
-    customerId:     input.customerId,
-    use:            input.use,
-    paymentForm:    input.paymentForm,
-    paymentMethod:  input.paymentMethod,
-    items:          input.items.map(item => ({
-                      productId: item.productId,
-                      quantity:  item.quantity,
-                      unitPrice: item.unitPrice,
-                      total:     item.quantity * item.unitPrice
-                    }))
+    customerName: customer.nombre,
+    customerId: input.customerId,
+    use: input.use,
+    paymentForm: input.paymentForm,
+    paymentMethod: input.paymentMethod,
+    items: enrichedItems.map((item) => ({
+      productId: item.productId,
+      quantity: item.quantity,
+      unitPrice: item.precio,
+      total: item.total,
+    })),
   };
 
   const aiSummary = await generateInvoiceSummary(invoice, summaryInput);
-  console.log("AI Summary: ", aiSummary);
+  newInvoice.aiSummary = aiSummary; // 🔹 Agregar resumen al documento
+
+  // Insertar en Mongo
   const result = await invoicesCollection.insertOne(newInvoice);
 
+  // Enviar SMS si hay número
   if (input.customerPhoneNumber) {
-    await sendSmsSummary(input.customerPhoneNumber, aiSummary);
+    await sendSms(aiSummary);
   } else {
     console.warn(
       `No se envió SMS: customerPhoneNumber no proporcionado para el cliente ${input.customerId}.`
     );
   }
-  
 
   return { id: result.insertedId, ...newInvoice };
 }
@@ -151,10 +182,12 @@ async function sendInvoiceByEmail(id, email) {
 async function generateInvoiceSummary(invoiceData, originalInput) {
   try {
     const prompt = `
-Redacta un resumen Máximo 3 oraciones y menos de 50 palabras. En español. breve y fácil de entender sobre esta factura. Usa un lenguaje claro y directo.
+Redacta un resumen Máximo 3 oraciones y menos de 30 palabras. En español. breve y fácil de entender sobre esta factura. Usa un lenguaje claro y directo.
 Incluye: nombre del cliente, total a pagar con moneda, uso, forma de pago, método de pago, y lista de artículos.
 
-Cliente: ${originalInput.customerName || "No especificado"} (ID: ${originalInput.customerId})
+Cliente: ${originalInput.customerName || "No especificado"} (ID: ${
+      originalInput.customerId
+    })
 Total: ${invoiceData.total || "No especificado"} ${invoiceData.currency || ""}
 Uso: ${originalInput.use || "No especificado"}
 Forma de pago: ${originalInput.paymentForm || "No especificado"}
@@ -210,32 +243,21 @@ ${
   }
 }
 
-async function sendSmsSummary(toPhoneNumber, message) {
-  if (!toPhoneNumber || !message) {
-    console.warn(
-      "Advertencia: No se puede enviar SMS. Número de teléfono o mensaje missing."
-    );
-    return;
-  }
-  if (!TWILIO_PHONE_NUMBER) {
-    console.error(
-      "Error: TWILIO_PHONE_NUMBER no está configurado en las variables de entorno."
-    );
-    return;
-  }
+const twilioClientSMS = twilio(
+  process.env.TWILIO_SID_JORGE,
+  process.env.TWILIO_TOKEN_JORGE
+);
 
+async function sendSms(message) {
   try {
-    const smsResponse = await twilioClient.messages.create({
-      body: `Resumen de tu factura: ${message}`,
-      from: "+17754597353", // Tu número de Twilio
-      to: "+523112688611", // Número de teléfono del cliente
+    const messageResponse = await twilioClientSMS.messages.create({
+      body: message,
+      from: process.env.TWILIO_NUMBER,
+      to: "+5213891089322",
     });
-    console.log(
-      `SMS enviado exitosamente a ${toPhoneNumber}. SID: ${smsResponse.sid}`
-    );
+    console.log(`SMS enviado con SID: ${messageResponse.sid}`);
   } catch (error) {
-    console.error(`Error al enviar SMS a ${toPhoneNumber}:`, error);
-    // Aquí podrías añadir una lógica para reintentar o registrar el error
+    console.error("Error enviando SMS:", error);
   }
 }
 
