@@ -5,6 +5,8 @@ const { ObjectId } = require("mongodb");
 const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
+const downloadsFolder = require("downloads-folder");
+const os = require("os");
 
 // Importar la librería de Twilio
 const twilio = require("twilio");
@@ -135,18 +137,41 @@ async function getInvoicesByCustomer(customerId) {
   return invoices.map((inv) => ({ id: inv._id, ...inv }));
 }
 
-async function cancelInvoice(id) {
-  const invoicesCollection = await getCollection("invoices");
-  const invoice = await invoicesCollection.findOne({ _id: new ObjectId(id) });
-  if (!invoice) throw new Error("Invoice not found");
+async function cancelInvoice(id, motivo = "01") {
+  try {
+    const invoicesCollection = await getCollection("invoices");
+    const invoice = await invoicesCollection.findOne({ _id: new ObjectId(id) });
+    if (!invoice) throw new Error("Invoice not found");
 
-  await facturapi.invoices.cancel(invoice.facturapiId);
-  await invoicesCollection.updateOne(
-    { _id: new ObjectId(id) },
-    { $set: { status: "canceled" } }
-  );
+    // Cancelar factura con motivo
+    await facturapi.invoices.cancel(invoice.facturapiId, {
+      motive: motivo, // <-- Aquí se pasa el motivo como string
+      // substitution: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", // solo si aplica
+    });
 
-  return true;
+    await invoicesCollection.updateOne(
+      { _id: new ObjectId(id) },
+      {
+        $set: {
+          status: "canceled",
+          canceledAt: new Date(),
+          cancelReason: motivo,
+        },
+      }
+    );
+  } catch (err) {
+    return err.message;
+  }
+
+  return `Factura con el id: ${id} cancelada exitosamente`;
+}
+
+function getDownloadsFolder() {
+  return path.join(os.homedir(), "Downloads");
+}
+
+function sanitizeFileName(name) {
+  return name.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").replace(/\s+/g, "_");
 }
 
 async function downloadInvoice(id, format) {
@@ -166,14 +191,14 @@ async function downloadInvoice(id, format) {
     },
   });
 
-  const downloadsDir = path.join(__dirname, "../downloads");
+  const downloadsDir = getDownloadsFolder();
 
-  // Crear directorio si no existe
-  if (!fs.existsSync(downloadsDir)) {
-    fs.mkdirSync(downloadsDir, { recursive: true });
-  }
+  // Nombre personalizado: factura_NOMBRE_FECHA
+  const name = invoice.customerName || "cliente";
+  const date = new Date(invoice.date || Date.now()).toISOString().split("T")[0];
+  const safeFileName = `factura_${sanitizeFileName(name)}_${date}.${format}`;
 
-  const filePath = path.join(downloadsDir, `${invoice.facturapiId}.${format}`);
+  const filePath = path.join(downloadsDir, safeFileName);
 
   const buffer = Buffer.from(response.data);
   fs.writeFileSync(filePath, buffer);

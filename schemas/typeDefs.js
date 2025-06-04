@@ -40,7 +40,7 @@ const typeDefs = gql`
 
   type Mutation {
     createInvoice(input: CreateInvoiceInput!): Invoice
-    cancelInvoice(id: ID!): Boolean
+    cancelInvoice(id: ID!, motivo: String): String
     downloadInvoice(id: ID!, format: String!): String
     sendInvoiceByEmail(id: ID!, email: String): Boolean
   }

@@ -1,4 +1,4 @@
-const invoiceModel = require('../models/invoicesModel');
+const invoiceModel = require("../models/invoicesModel");
 
 const resolvers = {
   Query: {
@@ -16,8 +16,8 @@ const resolvers = {
     createInvoice: async (_, { input }) => {
       return await invoiceModel.createInvoice(input);
     },
-    cancelInvoice: async (_, { id }) => {
-      return await invoiceModel.cancelInvoice(id);
+    cancelInvoice: async (_, { id, motivo }) => {
+      return await invoiceModel.cancelInvoice(id, motivo || "01");
     },
     downloadInvoice: async (_, { id, format }) => {
       return await invoiceModel.downloadInvoice(id, format);
