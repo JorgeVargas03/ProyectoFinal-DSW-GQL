@@ -73,6 +73,7 @@ async function createInvoice(input) {
     use: input.use,
     payment_form: input.paymentForm,
     payment_method: input.paymentMethod,
+    status: input.status || null
   });
 
   // Construir entrada para guardar en Mongo
@@ -83,6 +84,7 @@ async function createInvoice(input) {
     items: enrichedItems,
     total: invoice.total,
     createdAt: invoice.created_at,
+    status: producto.status || "valid"
   };
 
   // Generar resumen IA
@@ -98,6 +100,7 @@ async function createInvoice(input) {
       unitPrice: item.precio,
       total: item.total,
     })),
+    status: producto.status || "valid"
   };
 
   const aiSummary = await generateInvoiceSummary(invoice, summaryInput);
@@ -117,6 +120,72 @@ async function createInvoice(input) {
 
   return { id: result.insertedId, ...newInvoice };
 }
+
+async function updateInvoice(id, input) {
+  const invoicesCollection = await getCollection("invoices");
+  const productosCollection = await getCollection("productos");
+  const customersCollection = await getCollection("clientes");
+
+  const invoice = await invoicesCollection.findOne({ _id: new ObjectId(id) });
+  if (!invoice) throw new Error("Factura no encontrada");
+
+  if (invoice.status !== "draft") {
+    throw new Error("Solo se pueden editar facturas en estado 'draft'");
+  }
+
+  // Obtener información del cliente
+  const customer = await customersCollection.findOne({ _id: new ObjectId(invoice.customerId) });
+  if (!customer) throw new Error("Cliente no encontrado");
+
+  // Construir items enriquecidos
+  const facturapiItems = [];
+  const enrichedItems = [];
+
+  for (const item of input.items) {
+    const producto = await productosCollection.findOne({ _id: new ObjectId(item.productId) });
+    if (!producto) throw new Error(`Producto con ID ${item.productId} no encontrado`);
+
+    facturapiItems.push({
+      product: producto.facturapiId,
+      quantity: item.quantity,
+    });
+
+    enrichedItems.push({
+      productId: item.productId,
+      nombre: producto.nombre,
+      precio: producto.precio,
+      quantity: item.quantity,
+      total: producto.precio * item.quantity,
+      facturapiId: producto.facturapiId,
+    });
+  }
+
+  // Actualizar la factura en Facturapi
+  await facturapi.invoices.updateDraft(invoice.facturapiId, {
+    customer: customer.facturapiId,
+    items: facturapiItems,
+    use: input.use,
+    payment_form: input.paymentForm,
+    payment_method: input.paymentMethod,
+  });
+
+  // Actualizar la factura en la base de datos local
+  await invoicesCollection.updateOne(
+    { _id: new ObjectId(id) },
+    {
+      $set: {
+        items: enrichedItems,
+        use: input.use,
+        paymentForm: input.paymentForm,
+        paymentMethod: input.paymentMethod,
+        updatedAt: new Date(),
+      },
+    }
+  );
+
+  return { id: invoice._id, ...invoice };
+}
+
 
 async function listInvoices() {
   const invoicesCollection = await getCollection("invoices");

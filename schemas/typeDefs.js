@@ -33,6 +33,16 @@ const typeDefs = gql`
     customerPhoneNumber: String
   }
 
+  input UpdateInvoiceInput {
+  items: [InvoiceItemInput!]!
+  use: String
+  paymentForm: String
+  paymentMethod: String
+  customerPhoneNumber: String
+}
+
+
+
   type Query {
     getInvoice(id: ID!): Invoice
     listInvoices: [Invoice!]!
@@ -45,6 +55,7 @@ const typeDefs = gql`
     downloadInvoice(id: ID!, format: String!): String
     sendInvoiceByEmail(id: ID!, email: String): String
     updateInvoiceStatus(id: ID!): Invoice
+    updateInvoice(id: ID!, input: UpdateInvoiceInput!): Invoice
   }
 
   type Cliente {

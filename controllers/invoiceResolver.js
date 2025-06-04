@@ -28,6 +28,10 @@ const resolvers = {
     updateInvoiceStatus: async (_, { id }) => {
       return await invoiceModel.updateInvoiceStatus(id);
     },
+    updateInvoice: async (_, { id, input }) => {
+      return await updateInvoice(id, input);
+    },
+
   },
 };
 
