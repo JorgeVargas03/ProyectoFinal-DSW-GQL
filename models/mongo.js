@@ -4,10 +4,6 @@ const mongoose = require('mongoose');
 
 const URI = String(process.env.CONNECTION_STRING) + String(process.env.DATABASE);
 
-console.log('URI:', URI);
-console.log('process.env.CONNECTION_STRING:', process.env.CONNECTION_STRING);
-console.log('process.env.DATABASE:', process.env.DATABASE);
-
 mongoose.connect(URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true

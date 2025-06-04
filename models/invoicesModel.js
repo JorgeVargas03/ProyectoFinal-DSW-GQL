@@ -8,6 +8,12 @@ const axios = require("axios");
 const downloadsFolder = require("downloads-folder");
 const os = require("os");
 
+//AWS
+const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+
+
+
 // Importar la librería de Twilio
 const twilio = require("twilio");
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_SID;
@@ -18,6 +24,16 @@ console.log("GEMINI API KEY: ", apiKey);
 // Configurar cliente de Twilio (asegúrate de que estas variables de entorno estén definidas)
 const twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 const TWILIO_PHONE_NUMBER = process.env.TWILIO_SMS_NUMBER;
+
+//Configurar entorno de AWS
+const s3 = new S3Client({
+  region: process.env.AWS_REGION, // Por ejemplo, 'us-east-1'
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+
 
 async function getCollection(collectionName) {
   const db = await connectDB();
@@ -235,9 +251,6 @@ async function cancelInvoice(id, motivo = "01") {
   return `Factura con el id: ${id} cancelada exitosamente`;
 }
 
-function getDownloadsFolder() {
-  return path.join(os.homedir(), "Downloads");
-}
 
 function sanitizeFileName(name) {
   return name.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").replace(/\s+/g, "_");
@@ -260,20 +273,53 @@ async function downloadInvoice(id, format) {
     },
   });
 
-  const downloadsDir = getDownloadsFolder();
-
-  // Nombre personalizado: factura_NOMBRE_FECHA
   const name = invoice.customerName || "cliente";
   const date = new Date(invoice.date || Date.now()).toISOString().split("T")[0];
   const safeFileName = `factura_${sanitizeFileName(name)}_${date}.${format}`;
 
-  const filePath = path.join(downloadsDir, safeFileName);
+  const s3Client = new S3Client({ region: process.env.AWS_REGION });
 
-  const buffer = Buffer.from(response.data);
-  fs.writeFileSync(filePath, buffer);
+  // Subir a S3
+  const uploadParams = {
+    Bucket: process.env.AWS_S3_BUCKET_NAME,
+    Key: safeFileName,
+    Body: Buffer.from(response.data),
+    ContentType: getContentType(format),
+    ContentDisposition: `attachment; filename="${safeFileName}"`,
+  };
 
-  return filePath;
+
+  await s3Client.send(new PutObjectCommand(uploadParams));
+
+  // Obtener URL firmada (válida por 1 hora)
+  const getObjectParams = {
+    Bucket: process.env.AWS_S3_BUCKET_NAME,
+    Key: safeFileName,
+  };
+
+  const signedUrl = await getSignedUrl(
+    s3Client,
+    new GetObjectCommand(getObjectParams),
+    { expiresIn: 3600 } // segundos (1 hora)
+  );
+
+  return signedUrl;
 }
+
+
+function getContentType(format) {
+  switch (format) {
+    case "pdf":
+      return "application/pdf";
+    case "xml":
+      return "application/xml";
+    case "zip":
+      return "application/zip";
+    default:
+      return "application/octet-stream";
+  }
+}
+
 
 async function sendInvoiceByEmail(id, email) {
   const invoicesCollection = await getCollection("invoices");
