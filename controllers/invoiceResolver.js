@@ -25,6 +25,9 @@ const resolvers = {
     sendInvoiceByEmail: async (_, { id, email }) => {
       return await invoiceModel.sendInvoiceByEmail(id, email);
     },
+    updateInvoiceStatus: async (_, { id }) => {
+      return await invoiceModel.updateInvoiceStatus(id);
+    },
   },
 };
 

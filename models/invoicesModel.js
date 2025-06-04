@@ -217,30 +217,51 @@ async function sendInvoiceByEmail(id, email) {
   return `Factura enviada correctamente al correo: ${email}`;
 }
 
+async function updateInvoiceStatus(id) {
+  const invoicesCollection = await getCollection("invoices");
+  const invoice = await invoicesCollection.findOne({ _id: new ObjectId(id) });
+  if (!invoice) throw new Error("Factura no encontrada");
+
+  // Actualizar el estado de la factura en Facturapi
+  const updatedInvoice = await facturapi.invoices.updateStatus(invoice.facturapiId);
+
+  // Actualizar la factura en tu base de datos local
+  await invoicesCollection.updateOne(
+    { _id: new ObjectId(id) },
+    {
+      $set: {
+        status: updatedInvoice.status,
+        updatedAt: new Date(),
+      },
+    }
+  );
+  return { id: invoice._id, ...invoice };
+
+}
+
+
 async function generateInvoiceSummary(invoiceData, originalInput) {
   try {
     const prompt = `
 Redacta un resumen Máximo 3 oraciones y menos de 30 palabras. En español. breve y fácil de entender sobre esta factura. Usa un lenguaje claro y directo.
 Incluye: nombre del cliente, el totla pagado con moneda, uso, forma de pago, método de pago, y lista de artículos.
 
-Cliente: ${originalInput.customerName || "No especificado"} (ID: ${
-      originalInput.customerId
-    })
+Cliente: ${originalInput.customerName || "No especificado"} (ID: ${originalInput.customerId
+      })
 Total: ${invoiceData.total || "No especificado"} ${invoiceData.currency || ""}
 Uso: ${originalInput.use || "No especificado"}
 Forma de pago: ${originalInput.paymentForm || "No especificado"}
 Método de pago: ${originalInput.paymentMethod || "No especificado"}
 Artículos:
-${
-  originalInput.items && originalInput.items.length > 0
-    ? originalInput.items
-        .map(
-          (item) =>
-            `- ${item.quantity}x ${item.productId} (Unitario: $${item.unitPrice}, Total: $${item.total})`
-        )
-        .join("\n")
-    : "No hay artículos."
-}
+${originalInput.items && originalInput.items.length > 0
+        ? originalInput.items
+          .map(
+            (item) =>
+              `- ${item.quantity}x ${item.productId} (Unitario: $${item.unitPrice}, Total: $${item.total})`
+          )
+          .join("\n")
+        : "No hay artículos."
+      }
 `;
 
     const chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
@@ -262,10 +283,10 @@ ${
     const result = response.data;
     const candidate =
       result.candidates &&
-      result.candidates.length > 0 &&
-      result.candidates[0].content &&
-      result.candidates[0].content.parts &&
-      result.candidates[0].content.parts.length > 0
+        result.candidates.length > 0 &&
+        result.candidates[0].content &&
+        result.candidates[0].content.parts &&
+        result.candidates[0].content.parts.length > 0
         ? result.candidates[0].content.parts[0].text
         : null;
 
@@ -307,4 +328,5 @@ module.exports = {
   cancelInvoice,
   downloadInvoice,
   sendInvoiceByEmail,
+  updateInvoiceStatus
 };

@@ -10,6 +10,7 @@ const typeDefs = gql`
     createdAt: String!
     customerName: String # campo nuevo
     aiSummary: String # campo nuevo
+    status: String
   }
 
   type InvoiceItem {
@@ -43,6 +44,7 @@ const typeDefs = gql`
     cancelInvoice(id: ID!, motivo: String): String
     downloadInvoice(id: ID!, format: String!): String
     sendInvoiceByEmail(id: ID!, email: String): String
+    updateInvoiceStatus(id: ID!): Invoice
   }
 
   type Cliente {
