@@ -87,7 +87,7 @@ const typeDefs = gql`
   type Producto {
     id: ID!
     nombre: String!
-    descripcion: String
+    descripcion: String!
     precio: Float!
     stock: Int!
     facturapiId: String
