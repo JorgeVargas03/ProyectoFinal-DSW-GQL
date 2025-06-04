@@ -214,7 +214,7 @@ async function sendInvoiceByEmail(id, email) {
   const payload = email ? { email } : undefined;
   await facturapi.invoices.sendByEmail(invoice.facturapiId, payload);
 
-  return true;
+  return `Factura enviada correctamente al correo: ${email}`;
 }
 
 async function generateInvoiceSummary(invoiceData, originalInput) {

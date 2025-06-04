@@ -42,7 +42,7 @@ const typeDefs = gql`
     createInvoice(input: CreateInvoiceInput!): Invoice
     cancelInvoice(id: ID!, motivo: String): String
     downloadInvoice(id: ID!, format: String!): String
-    sendInvoiceByEmail(id: ID!, email: String): Boolean
+    sendInvoiceByEmail(id: ID!, email: String): String
   }
 
   type Cliente {
