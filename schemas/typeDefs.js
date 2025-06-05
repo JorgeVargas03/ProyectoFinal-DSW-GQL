@@ -24,14 +24,16 @@ const typeDefs = gql`
     unitPrice: Float
   }
 
-  input CreateInvoiceInput {
-    customerId: ID!
-    items: [InvoiceItemInput!]!
-    use: String!
-    paymentForm: String!
-    paymentMethod: String!
-    customerPhoneNumber: String
-  }
+input CreateInvoiceInput {
+  customerId: ID!
+  items: [InvoiceItemInput!]!
+  use: String!
+  paymentForm: String!
+  paymentMethod: String!
+  customerPhoneNumber: String
+  status: String
+}
+
 
   input UpdateInvoiceInput {
   items: [InvoiceItemInput!]!
