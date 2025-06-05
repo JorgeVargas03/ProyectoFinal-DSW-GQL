@@ -90,8 +90,8 @@ async function createInvoice(input) {
     payment_method: input.paymentMethod,
   }
 
-  if(input.status || input.status !== undefined){
-    dataInvoice.push(input.status);
+  if (input.status !== undefined) {
+    dataInvoice.status = input.status;
   }
 
   // Crear factura en Facturapi
