@@ -100,7 +100,7 @@ async function createInvoice(input) {
     items: enrichedItems,
     total: invoice.total,
     createdAt: invoice.created_at,
-    status: producto.status || "valid"
+    status: "valid"
   };
 
   // Generar resumen IA
@@ -116,7 +116,7 @@ async function createInvoice(input) {
       unitPrice: item.precio,
       total: item.total,
     })),
-    status: producto.status || "valid"
+    status: "valid"
   };
 
   const aiSummary = await generateInvoiceSummary(invoice, summaryInput);
