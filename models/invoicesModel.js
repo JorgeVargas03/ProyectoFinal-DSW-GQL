@@ -107,7 +107,7 @@ async function createInvoice(input) {
     items: enrichedItems,
     total: invoice.total,
     createdAt: invoice.created_at,
-    status: "valid"
+    status: invoice.status
   };
 
   // Generar resumen IA
