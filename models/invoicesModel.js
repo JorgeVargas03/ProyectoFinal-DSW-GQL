@@ -9,10 +9,12 @@ const downloadsFolder = require("downloads-folder");
 const os = require("os");
 
 //AWS
-const { S3Client, PutObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
+const {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+} = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
-
-
 
 // Importar la librería de Twilio
 const twilio = require("twilio");
@@ -33,7 +35,6 @@ const s3 = new S3Client({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   },
 });
-
 
 async function getCollection(collectionName) {
   const db = await connectDB();
@@ -88,16 +89,14 @@ async function createInvoice(input) {
     use: input.use,
     payment_form: input.paymentForm,
     payment_method: input.paymentMethod,
-  }
+  };
 
   if (input.status !== undefined) {
     dataInvoice.status = input.status;
   }
 
   // Crear factura en Facturapi
-  const invoice = await facturapi.invoices.create({
-    dataInvoice
-  });
+  const invoice = await facturapi.invoices.create(dataInvoice);
 
   // Construir entrada para guardar en Mongo
   const newInvoice = {
@@ -107,7 +106,7 @@ async function createInvoice(input) {
     items: enrichedItems,
     total: invoice.total,
     createdAt: invoice.created_at,
-    status: invoice.status
+    status: invoice.status,
   };
 
   // Generar resumen IA
@@ -123,7 +122,7 @@ async function createInvoice(input) {
       unitPrice: item.precio,
       total: item.total,
     })),
-    status: invoice.status
+    status: invoice.status,
   };
 
   const aiSummary = await generateInvoiceSummary(invoice, summaryInput);
@@ -157,7 +156,9 @@ async function updateInvoice(id, input) {
   }
 
   // Obtener información del cliente
-  const customer = await customersCollection.findOne({ _id: new ObjectId(invoice.customerId) });
+  const customer = await customersCollection.findOne({
+    _id: new ObjectId(invoice.customerId),
+  });
   if (!customer) throw new Error("Cliente no encontrado");
 
   // Construir items enriquecidos
@@ -165,8 +166,11 @@ async function updateInvoice(id, input) {
   const enrichedItems = [];
 
   for (const item of input.items) {
-    const producto = await productosCollection.findOne({ _id: new ObjectId(item.productId) });
-    if (!producto) throw new Error(`Producto con ID ${item.productId} no encontrado`);
+    const producto = await productosCollection.findOne({
+      _id: new ObjectId(item.productId),
+    });
+    if (!producto)
+      throw new Error(`Producto con ID ${item.productId} no encontrado`);
 
     facturapiItems.push({
       product: producto.facturapiId,
@@ -208,7 +212,6 @@ async function updateInvoice(id, input) {
 
   return { id: invoice._id, ...invoice };
 }
-
 
 async function listInvoices() {
   const invoicesCollection = await getCollection("invoices");
@@ -258,7 +261,6 @@ async function cancelInvoice(id, motivo = "01") {
   return `Factura con el id: ${id} cancelada exitosamente`;
 }
 
-
 function sanitizeFileName(name) {
   return name.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").replace(/\s+/g, "_");
 }
@@ -295,7 +297,6 @@ async function downloadInvoice(id, format) {
     ContentDisposition: `attachment; filename="${safeFileName}"`,
   };
 
-
   await s3Client.send(new PutObjectCommand(uploadParams));
 
   // Obtener URL firmada (válida por 1 hora)
@@ -313,7 +314,6 @@ async function downloadInvoice(id, format) {
   return signedUrl;
 }
 
-
 function getContentType(format) {
   switch (format) {
     case "pdf":
@@ -326,7 +326,6 @@ function getContentType(format) {
       return "application/octet-stream";
   }
 }
-
 
 async function sendInvoiceByEmail(id, email) {
   const invoicesCollection = await getCollection("invoices");
@@ -345,7 +344,9 @@ async function updateInvoiceStatus(id) {
   if (!invoice) throw new Error("Factura no encontrada");
 
   // Actualizar el estado de la factura en Facturapi
-  const updatedInvoice = await facturapi.invoices.updateStatus(invoice.facturapiId);
+  const updatedInvoice = await facturapi.invoices.updateStatus(
+    invoice.facturapiId
+  );
 
   // Actualizar la factura en tu base de datos local
   await invoicesCollection.updateOne(
@@ -358,9 +359,7 @@ async function updateInvoiceStatus(id) {
     }
   );
   return { id: invoice._id, ...invoice };
-
 }
-
 
 async function generateInvoiceSummary(invoiceData, originalInput) {
   try {
@@ -368,22 +367,24 @@ async function generateInvoiceSummary(invoiceData, originalInput) {
 Redacta un resumen Máximo 3 oraciones y menos de 30 palabras. En español. breve y fácil de entender sobre esta factura. Usa un lenguaje claro y directo.
 Incluye: nombre del cliente, el totla pagado con moneda, uso, forma de pago, método de pago, y lista de artículos.
 
-Cliente: ${originalInput.customerName || "No especificado"} (ID: ${originalInput.customerId
-      })
+Cliente: ${originalInput.customerName || "No especificado"} (ID: ${
+      originalInput.customerId
+    })
 Total: ${invoiceData.total || "No especificado"} ${invoiceData.currency || ""}
 Uso: ${originalInput.use || "No especificado"}
 Forma de pago: ${originalInput.paymentForm || "No especificado"}
 Método de pago: ${originalInput.paymentMethod || "No especificado"}
 Artículos:
-${originalInput.items && originalInput.items.length > 0
-        ? originalInput.items
-          .map(
-            (item) =>
-              `- ${item.quantity}x ${item.productId} (Unitario: $${item.unitPrice}, Total: $${item.total})`
-          )
-          .join("\n")
-        : "No hay artículos."
-      }
+${
+  originalInput.items && originalInput.items.length > 0
+    ? originalInput.items
+        .map(
+          (item) =>
+            `- ${item.quantity}x ${item.productId} (Unitario: $${item.unitPrice}, Total: $${item.total})`
+        )
+        .join("\n")
+    : "No hay artículos."
+}
 `;
 
     const chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
@@ -405,10 +406,10 @@ ${originalInput.items && originalInput.items.length > 0
     const result = response.data;
     const candidate =
       result.candidates &&
-        result.candidates.length > 0 &&
-        result.candidates[0].content &&
-        result.candidates[0].content.parts &&
-        result.candidates[0].content.parts.length > 0
+      result.candidates.length > 0 &&
+      result.candidates[0].content &&
+      result.candidates[0].content.parts &&
+      result.candidates[0].content.parts.length > 0
         ? result.candidates[0].content.parts[0].text
         : null;
 
@@ -451,5 +452,5 @@ module.exports = {
   downloadInvoice,
   sendInvoiceByEmail,
   updateInvoiceStatus,
-  updateInvoice
+  updateInvoice,
 };
