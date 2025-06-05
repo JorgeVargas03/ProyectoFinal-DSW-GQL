@@ -123,7 +123,7 @@ async function createInvoice(input) {
       unitPrice: item.precio,
       total: item.total,
     })),
-    status: "valid"
+    status: invoice.status
   };
 
   const aiSummary = await generateInvoiceSummary(invoice, summaryInput);
