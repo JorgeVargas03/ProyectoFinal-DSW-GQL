@@ -82,14 +82,21 @@ async function createInvoice(input) {
     });
   }
 
-  // Crear factura en Facturapi
-  const invoice = await facturapi.invoices.create({
+  const dataInvoice = {
     customer: customer.facturapiId,
     items: facturapiItems,
     use: input.use,
     payment_form: input.paymentForm,
     payment_method: input.paymentMethod,
-    status: input.status || null
+  }
+
+  if(input.status || input.status !== undefined){
+    dataInvoice.push(input.status);
+  }
+
+  // Crear factura en Facturapi
+  const invoice = await facturapi.invoices.create({
+    dataInvoice
   });
 
   // Construir entrada para guardar en Mongo
@@ -443,5 +450,6 @@ module.exports = {
   cancelInvoice,
   downloadInvoice,
   sendInvoiceByEmail,
-  updateInvoiceStatus
+  updateInvoiceStatus,
+  updateInvoice
 };
